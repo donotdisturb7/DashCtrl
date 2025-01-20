@@ -6,6 +6,7 @@ import json
 import threading
 import time
 from datetime import datetime
+import time
 import numpy as np
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QLabel, QPushButton, QStackedWidget,

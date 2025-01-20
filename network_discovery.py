@@ -3,6 +3,10 @@ import json
 import threading
 import psutil
 import platform
+from datetime import datetime
+import time
+import sys
+from PyQt5.QtWidgets import QApplication, QMainWindow, QStackedWidget
 
 class NetworkDiscovery:
     def __init__(self, port=5000):
