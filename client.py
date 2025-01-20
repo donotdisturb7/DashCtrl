@@ -1,92 +1,138 @@
+import psutil
 import socket
 import json
-import psutil
 import platform
 import time
-import threading
+import sys
+import os
+import subprocess
 
-class MonitoringClient:
-    def __init__(self, server_host='localhost', server_port=5000):
-        self.server_host = server_host
-        self.server_port = server_port
-        self.socket = None
-        self.connected = False
-        
-    def connect(self):
+def get_system_stats():
+    stats = {}
+    
+    # CPU
+    stats['cpu_name'] = platform.processor()
+    stats['cpu_total'] = psutil.cpu_percent()
+    stats['cpu_info'] = {
+        'physical_cores': psutil.cpu_count(logical=False),
+        'threads': psutil.cpu_count(logical=True),
+        'freq_current': psutil.cpu_freq().current if psutil.cpu_freq() else 0
+    }
+    
+    # Mémoire
+    mem = psutil.virtual_memory()
+    stats['memory'] = {
+        'total': mem.total,
+        'available': mem.available,
+        'used': mem.used,
+        'cached': mem.cached if hasattr(mem, 'cached') else 0,
+        'percent': mem.percent
+    }
+    
+    # Disques
+    disk_info = {'partitions': []}
+    for part in psutil.disk_partitions():
         try:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.connect((self.server_host, self.server_port))
-            self.connected = True
-            
-            # Envoyer les informations initiales de l'ordinateur
-            initial_info = {
-                "hostname": platform.node(),
-                "system": platform.system(),
-                "version": platform.version()
-            }
-            self.socket.send(json.dumps(initial_info).encode())
-            
-            # Commencer à écouter les commandes
-            self.listen_for_commands()
-            
-        except Exception as e:
-            print(f"Échec de la connexion: {e}")
-            self.connected = False
+            usage = psutil.disk_usage(part.mountpoint)
+            disk_info['partitions'].append({
+                'device': part.device,
+                'mountpoint': part.mountpoint,
+                'fstype': part.fstype,
+                'total': usage.total,
+                'used': usage.used,
+                'free': usage.free,
+                'percent': usage.percent
+            })
+        except Exception:
+            continue
+    stats['disk'] = disk_info
     
-    def get_system_stats(self):
-        return {
-            "cpu_percent": psutil.cpu_percent(),
-            "memory_percent": psutil.virtual_memory().percent,
-            "disk_percent": psutil.disk_usage('/').percent
+    return stats
+
+def try_shutdown_linux():
+    """Essaie différentes méthodes d'extinction sur Linux"""
+    commands = [
+        # D'abord essayer systemctl qui est moderne et largement supporté
+        ["systemctl", "poweroff"],
+        # Commandes shutdown classiques
+        ["shutdown", "-h", "now"],
+        ["shutdown", "-P", "now"],
+        # Commande poweroff directe
+        ["poweroff"],
+        # dbus-send pour les systèmes utilisant D-Bus
+        ["dbus-send", "--system", "--print-reply", "--dest=org.freedesktop.login1", 
+         "/org/freedesktop/login1", "org.freedesktop.login1.Manager.PowerOff", "boolean:true"]
+    ]
+    
+    for cmd in commands:
+        try:
+            # Essayer d'abord sans sudo
+            if subprocess.run(cmd, stderr=subprocess.DEVNULL).returncode == 0:
+                return True
+            
+            # Si ça ne marche pas, essayer avec sudo
+            sudo_cmd = ["sudo", "-n"] + cmd  # -n pour ne pas demander de mot de passe
+            if subprocess.run(sudo_cmd, stderr=subprocess.DEVNULL).returncode == 0:
+                return True
+        except Exception:
+            continue
+    
+    return False
+
+def main():
+    # Configuration
+    SERVER_HOST = 'localhost'
+    SERVER_PORT = 5000
+    
+    # Créer une socket client
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    
+    try:
+        # Se connecter au serveur
+        client.connect((SERVER_HOST, SERVER_PORT))
+        
+        # Envoyer les informations initiales
+        info = {
+            "hostname": socket.gethostname(),
+            "system": platform.system(),
+            "version": platform.version()
         }
-    
-    def handle_command(self, command_data):
-        command = command_data.get("command")
+        client.send(json.dumps(info).encode())
         
-        if command == "get_stats":
-            stats = self.get_system_stats()
-            return json.dumps(stats)
-        elif command == "ping":
-            return json.dumps({"status": "alive"})
-        
-        return json.dumps({"error": "Commande inconnue"})
-    
-    def listen_for_commands(self):
-        while self.connected:
+        # Boucle principale
+        while True:
             try:
-                data = self.socket.recv(1024).decode()
+                # Recevoir la commande du serveur
+                data = client.recv(1024).decode()
                 if not data:
                     break
                 
-                command_data = json.loads(data)
-                response = self.handle_command(command_data)
-                self.socket.send(response.encode())
+                command = json.loads(data)
                 
+                if command["command"] == "get_stats":
+                    # Obtenir et envoyer les statistiques système
+                    stats = get_system_stats()
+                    client.send(json.dumps(stats).encode())
+                
+                elif command["command"] == "shutdown":
+                    # Éteindre l'ordinateur
+                    if platform.system() == "Windows":
+                        os.system("shutdown /s /t 1")
+                    else:
+                        # Essayer d'éteindre avec différentes méthodes sur Linux
+                        if not try_shutdown_linux():
+                            print("Impossible d'éteindre le système. Vérifiez les permissions.")
+                    break
+            
             except Exception as e:
-                print(f"Erreur pendant l'écoute: {e}")
+                print(f"Erreur lors du traitement de la commande: {e}")
                 break
-        
-        self.connected = False
-        if self.socket:
-            self.socket.close()
     
-    def run(self):
-        while True:
-            if not self.connected:
-                print("Tentative de connexion au serveur...")
-                self.connect()
-            time.sleep(5)  # Attendre avant de réessayer si la connexion échoue
+    except Exception as e:
+        print(f"Erreur de connexion: {e}")
+    
+    finally:
+        client.close()
 
 if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Client de Surveillance Système')
-    parser.add_argument('--host', default='localhost',
-                      help='Adresse du serveur hôte (défaut: localhost)')
-    parser.add_argument('--port', type=int, default=5000,
-                      help='Port du serveur (défaut: 5000)')
-    
-    args = parser.parse_args()
-    
-    client = MonitoringClient(args.host, args.port)
-    client.run()
+    main()
