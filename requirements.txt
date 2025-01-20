@@ -1,5 +1,3 @@
-psutil>=5.9.0
-PyQt6>=6.4.0
-py-cpuinfo>=9.0.0
-pyqtgraph>=0.13.3
-numpy>=1.24.0
+customtkinter==5.2.1
+psutil==5.9.6
+pillow==10.1.0
