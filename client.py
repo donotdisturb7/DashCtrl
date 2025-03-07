@@ -5,7 +5,6 @@ import platform
 import time
 import sys
 import os
-import subprocess
 
 def get_system_stats():
     stats = {}
@@ -49,38 +48,8 @@ def get_system_stats():
     
     return stats
 
-def try_shutdown_linux():
-    """Essaie différentes méthodes d'extinction sur Linux"""
-    commands = [
-        # D'abord essayer systemctl qui est moderne et largement supporté
-        ["systemctl", "poweroff"],
-        # Commandes shutdown classiques
-        ["shutdown", "-h", "now"],
-        ["shutdown", "-P", "now"],
-        # Commande poweroff directe
-        ["poweroff"],
-        # dbus-send pour les systèmes utilisant D-Bus
-        ["dbus-send", "--system", "--print-reply", "--dest=org.freedesktop.login1", 
-         "/org/freedesktop/login1", "org.freedesktop.login1.Manager.PowerOff", "boolean:true"]
-    ]
-    
-    for cmd in commands:
-        try:
-            # Essayer d'abord sans sudo
-            if subprocess.run(cmd, stderr=subprocess.DEVNULL).returncode == 0:
-                return True
-            
-            # Si ça ne marche pas, essayer avec sudo
-            sudo_cmd = ["sudo", "-n"] + cmd  # -n pour ne pas demander de mot de passe
-            if subprocess.run(sudo_cmd, stderr=subprocess.DEVNULL).returncode == 0:
-                return True
-        except Exception:
-            continue
-    
-    return False
-
 def main():
-    # Configuration
+    
     SERVER_HOST = 'localhost'
     SERVER_PORT = 5000
     
@@ -99,7 +68,7 @@ def main():
         }
         client.send(json.dumps(info).encode())
         
-        # Boucle principale
+     
         while True:
             try:
                 # Recevoir la commande du serveur
@@ -119,9 +88,7 @@ def main():
                     if platform.system() == "Windows":
                         os.system("shutdown /s /t 1")
                     else:
-                        # Essayer d'éteindre avec différentes méthodes sur Linux
-                        if not try_shutdown_linux():
-                            print("Impossible d'éteindre le système. Vérifiez les permissions.")
+                        os.system("shutdown -h now")
                     break
             
             except Exception as e:
