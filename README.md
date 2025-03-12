@@ -134,4 +134,3 @@ Le serveur est l'interface graphique qui affiche les informations des clients co
 
 - Les connexions sont en local par défaut (localhost)
 - La commande d'extinction nécessite les permissions appropriées
-- Pas d'authentification pour le moment - à utiliser en réseau local de confiance

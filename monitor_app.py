@@ -43,6 +43,11 @@ class MonitorApp(ctk.CTk):
                                             text="Ordinateurs en ligne", command=self.show_computers_page)
         self.computers_button.grid(row=2, column=0, sticky="ew")
         
+        # Bouton "À propos"
+        self.about_button = ctk.CTkButton(self.navigation_frame, corner_radius=0, height=40,
+                                            text="À propos", command=self.show_about_page)
+        self.about_button.grid(row=3, column=0, sticky="ew")
+        
         # Création du cadre principal
         self.main_frame = ctk.CTkFrame(self, corner_radius=0)
         self.main_frame.grid(row=0, column=1, sticky="nsew")
@@ -94,6 +99,25 @@ class MonitorApp(ctk.CTk):
         
         self.update_computers_list()
         self.current_page = self.computers_frame
+    
+    def show_about_page(self):
+        if self.current_page:
+            self.current_page.destroy()
+
+        self.about_frame = ctk.CTkFrame(self.main_frame)
+        self.about_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+
+        title_label = ctk.CTkLabel(self.about_frame, text="À propos de DashCtrl", font=ctk.CTkFont(size=24, weight="bold"))
+        title_label.pack(pady=20)
+
+        description_label = ctk.CTkLabel(self.about_frame, text="Ce projet a été réalisé par:", font=ctk.CTkFont(size=16))
+        description_label.pack(pady=10)
+
+        developers_text = "Développeurs:\nRénald DESIRE\nJean-Michel Harrow"  
+        developers_label = ctk.CTkLabel(self.about_frame, text=developers_text, justify="left")
+        developers_label.pack(pady=10)
+
+        self.current_page = self.about_frame
     
     def show_stats_page(self, computer_id: str):
         if self.current_page:
